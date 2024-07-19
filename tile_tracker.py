@@ -1,15 +1,39 @@
-import asyncio, time, Mail, csv, os
+import asyncio, time, Mail, csv, os, options_pane
 
+from options_pane import optionspane
 from tkinter import *
 from tkinter.ttk import Treeview
+from tkinter import messagebox
 from pyppeteer import launch
 from app2 import USERNAME,PASSWORD,USERNAME2,PASSWORD2, EMAIL3,PASSWORD3
 
 from aiohttp import ClientSession
 from geofence import GeoFence
 from pytile import async_login
+from ctypes import windll
+# windll.shcore.SetProcessDpiAwareness(1)
+
+running = True
+settings = optionspane.get_options()
+
+def options():
+    optionspane()
+
+
+# def update_settings(settings):
+    
+
+def on_exit():
+    global running
+    if messagebox.askokcancel("Quit","Are you sure you want to exit?"):
+        root.destroy()
+        running = False
 
 root = Tk()
+root.protocol("WM_DELETE_WINDOW", on_exit)
+root.minsize(400,400)
+menubar = Menu(root)
+
 group1 = LabelFrame(root, text="Tracked Tiles", padx=5, pady=5)
 group2 = LabelFrame(root,text="Tracking Log", padx=5, pady=5)
 
@@ -18,7 +42,7 @@ tree = Treeview(group1, columns=('name','timestamp','location'),show="headings",
 mylist = Listbox(group2, width=50 )
 geofences = []
 emails = []
-update_time = 120
+# settings[0] = 120
 
 
 class tiletraker:
@@ -35,7 +59,7 @@ class tiletraker:
         return tiles
     
     def initialize_files(self):
-        with open('Geofences.csv', mode = 'r')as file: #function appends all geofences list so program can compare to all geofences when checking location
+        with open('geofences.csv', mode = 'r')as file: #function appends all geofences list so program can compare to all geofences when checking location
         
             # reading the CSV file
             csvFile = csv.reader(file)
@@ -115,15 +139,15 @@ class tiletraker:
     async def main(self, runtype, tiles) -> None:
         for tile_uuid, tile in tiles.items():
             
-            if tile.name == 'Wallet': 
-                await self.capture_map(tile.latitude, tile.longitude)
-                for email in emails:
-                    address = email
-                    email = Mail.email(address,'Tile has left '+ tile.lastlocation, ('The tile \'' + tile.name + '\' has exited the geofence \'' + tile.lastlocation + '\' its last location was at ' + str(tile.latitude) + ' ' + str(tile.longitude)))
-                    email.send()
-                    print(f'location email sent for {tile.name} to {address}')
-            else:
-                print("false")
+            # if tile.name == 'Wallet': 
+            #     await self.capture_map(tile.latitude, tile.longitude)
+            #     for email in emails:
+            #         address = email
+            #         email = Mail.email(address,'Tile has left '+ tile.lastlocation, ('The tile \'' + tile.name + '\' has exited the geofence \'' + tile.lastlocation + '\' its last location was at ' + str(tile.latitude) + ' ' + str(tile.longitude)))
+            #         email.send()
+            #         print(f'location email sent for {tile.name} to {address}')
+            # else:
+            #     print("false")
 
             if not (tile.last_timestamp == tile.get_lasttime()):
                 location = self.check_location(tile)
@@ -165,26 +189,29 @@ class tiletraker:
                 asyncio.run(self.main(1,self.tiles2))
                 self.start_time = time.time()
             except:
-                print("Failed to connect, attempting to reconnect again in", update_time, "seconds.")
+                print("Failed to connect, attempting to reconnect again in", settings[0], "seconds.")
 
         self.start_time = time.time()
         root.title("Tile Tracker")
         self.initialize_files()
         initilized = False
-        current_time = (time.time() + update_time + 1)
+        current_time = (time.time() + float(settings[0]) + 1)
         while not initilized:
             
-            if current_time > (self.start_time + update_time):
+            if current_time > (self.start_time + float(settings[0])):
                 try:
                     self.tiles2=asyncio.run(self.initialize_tiles(USERNAME2,PASSWORD2))
                     asyncio.run(self.main(0,self.tiles2))
                     initilized = True
-                except ConnectionAbortedError:
-                    print("Failed to connect, attempting to reconnect again in", update_time, " seconds.")
                 except Exception as e:
-                    print("An error has occured while attempting to update tiles, trying again in", update_time , " seconds.")
-                    print(e)
+                    if "getaddrinfo failed" in str(e):
+                        # messagebox.showerror("Connection Error","Failed to connect to tile account " + USERNAME2 + ", please check internet connection. Attempting to reconnect again in "+ str(settings[0]) + " seconds.",)
+                        print("Failed to connect to tile account " + USERNAME2 + ", please check internet connection. Attempting to reconnect again in "+ str(settings[0]) + " seconds.")
+                    else:
+                        print("An error has occured while attempting to update tiles, trying again in "+ settings[0] + " seconds.")
+                        print(e)
                 self.start_time = time.time()
+            time.sleep(0.1)
             current_time = time.time()
         
         group1.grid(row=0, column=0, columnspan=3, padx=10, pady=10, sticky=S+E+W+N)
@@ -214,25 +241,36 @@ class tiletraker:
         scrollbar.grid(column=1,row=0,sticky='nse')
         scrollbar.config( command = tree.yview )
         
-        mylist.grid(row=1,column=0,sticky=S+N+E+W)
+        mylist.grid(row=0,column=0,sticky=S+N+E+W)
 
-        refreshButton = Button(text="refresh", command=refresh)
+        refreshButton = Button(group1,text="Refresh", command=refresh)
         refreshButton.grid(row=2,column=0)
 
+        root.config(menu=menubar)
+        
+        filemenu = Menu(menubar,tearoff=0)
+        filemenu.add_command(label="Options",command=options)
+        filemenu.add_separator( )
+        filemenu.add_command(label="Exit",command=on_exit)
+
+        menubar.add_cascade(label="File", menu=filemenu)
+
         self.start_time = time.time()
-        while True:
+        while running:
             current_time = time.time()
             time.sleep(0.1)
-            if current_time > (self.start_time + update_time):
+            if current_time > (self.start_time + float(settings[0])):
                 try:
                     self.tiles2 = asyncio.run(self.update(USERNAME2,PASSWORD2,self.tiles2))
                     asyncio.run(self.main(1,self.tiles2))
-                except ConnectionAbortedError:
-                    print("Failed to connect, attempting to reconnect again in"+ str(update_time) + "seconds.")
                 except Exception as e:
-                    print("An error has occured while attempting to update tiles, trying again in" + str(update_time) + "seconds.")
-                    print(e)
+                    if "getaddrinfo failed" in str(e):
+                        print("Failed to connect to tile account " + USERNAME2 + ", please check internet connection. Attempting to reconnect again in "+ str(settings[0]) + " seconds.")
+                    else:
+                        print("An error has occured while attempting to update tiles, trying again in "+ settings[0] + " seconds.")
+                        print(e)
                 
                 self.start_time = time.time()
             root.update_idletasks()
             root.update()
+            
