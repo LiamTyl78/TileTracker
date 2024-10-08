@@ -21,7 +21,7 @@ class email:
         self.msg['Subject'] = self.emailSubject
         self.msg.set_content(self.emailBody)
 
-        with open('C:/Users/e-tyl/OneDrive - Rowan University/TileTraker/map.png', 'rb') as f:
+        with open('map.png', 'rb') as f:
             image_data = f.read()
             image_type = 'png'
 
