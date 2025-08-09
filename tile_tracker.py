@@ -24,6 +24,18 @@ emails = []
 class tiletraker(tk.Tk):
     
     def __init__(self):
+        if not os.path.exists("geofences.csv"):
+            print("genrating geofence config file...")
+            with open("geofences.csv", "x") as f:
+                f.write("")
+        if not os.path.exists("accounts.csv"):
+            with open("accounts.csv", "x") as f:
+                f.write("")
+        if not os.path.exists("emails.csv"):
+            print("genrating email config file...")
+            with open("emails.csv", "x") as f:
+                f.write("")
+
         # if not keyring.get_credential("tiletracker", "encryption_key") == None:
         #     keyring.delete_password("tiletracker", "encryption_key")
 
