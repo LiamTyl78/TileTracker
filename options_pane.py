@@ -1,6 +1,8 @@
 import email
 from math import fabs
-import csv, tile_tracker
+import csv, tile_tracker, os, keyring
+
+from cryptography.fernet import Fernet
 
 import re
 import tkinter as tk
@@ -340,7 +342,7 @@ class addAccountPane(tk.Toplevel):
 
     def on_ok(self):
         username = self.username_entry.get().strip()
-        password = self.password_entry.get()
+        password = encrypt_password(self.password_entry.get())
 
         if not username == "" and not password == "":
             if re.match(optionspane.email_regex,username):
@@ -395,7 +397,8 @@ class editAccountPane(tk.Toplevel):
         if not self.username_entry.get().strip() == "" and not self.password_entry.get() == "":
             if re.match(optionspane.email_regex,username):
                 if all((username != account[0] or account[0] == self.account[0]) for account in optionspane.account_list_current):
-                    edited_account = [self.username_entry.get().strip() ,self.password_entry.get()]
+                    new_pass = encrypt_password(self.password_entry.get())
+                    edited_account = [self.username_entry.get().strip(),new_pass]
                     with open("accounts.csv","r",newline="") as file:
                         reader = csv.reader(file)
                         accounts = list(reader)
@@ -553,3 +556,19 @@ class editGeofencePane(tk.Toplevel):
 
 def is_numeric(input_str):
     return bool(re.match(r'^-?\d+(\.\d+)?$', input_str))
+
+def encrypt_password(password):
+
+    password = bytes(password, "utf-8")
+
+    if keyring.get_password("tiletracker", "encryption_key") == None:
+        key = Fernet.generate_key()
+        keyring.set_password("tiletracker", "encryption_key", key.decode())
+    else:
+        key = keyring.get_password("tiletracker", "encryption_key").encode()
+    print(keyring.get_password("tiletracker", "encryption_key"))
+    
+    f = Fernet(key)
+
+    encrypted_pass = f.encrypt(password).decode()
+    return encrypted_pass

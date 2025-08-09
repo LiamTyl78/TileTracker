@@ -89,3 +89,6 @@ chrome-win/locales/ur.pak
 chrome-win/locales/vi.pak
 chrome-win/locales/zh-CN.pak
 chrome-win/locales/zh-TW.pak
+/.vscode
+__pycache__/
+*.pyc

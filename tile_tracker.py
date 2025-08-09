@@ -6,11 +6,15 @@ from tkinter import *
 from tkinter.ttk import Treeview
 from tkinter import messagebox
 from pyppeteer import launch
-from app2 import USERNAME,PASSWORD,USERNAME2,PASSWORD2, EMAIL3,PASSWORD3
+from app2 import USERNAME2,PASSWORD2
+import keyring
 
 from aiohttp import ClientSession
 from geofence import GeoFence
 from pytile import async_login, tile
+
+import cryptography
+from cryptography.fernet import Fernet
 
 running = True
 settings = optionspane.get_options()
@@ -20,6 +24,9 @@ emails = []
 class tiletraker(tk.Tk):
     
     def __init__(self):
+        # if not keyring.get_credential("tiletracker", "encryption_key") == None:
+        #     keyring.delete_password("tiletracker", "encryption_key")
+
         self.updates_avalible = False
         self.accounts = self.init_tile_list()
         def refresh():
@@ -94,6 +101,8 @@ class tiletraker(tk.Tk):
         with open("accounts.csv","r",newline="") as accounts_file:
             reader = csv.reader(accounts_file)
             accounts = list(reader)
+        if len(accounts) == 0:
+            initiziled = True
         while not initiziled:
             if (start_time + float(settings[0])) < time.time():
                 for account in accounts:
@@ -105,8 +114,10 @@ class tiletraker(tk.Tk):
                         if "getaddrinfo failed" in str(e):
                             # messagebox.showerror("Connection Error","Failed to connect to tile account " + USERNAME2 + ", please check internet connection. Attempting to reconnect again in "+ str(settings[0]) + " seconds.",)
                             print("Failed to connect to tile account " + account[0] + ", please check internet connection. Attempting to reconnect again in "+ str(settings[0]) + " seconds.")
+                        elif str(e) == "Invalid credentials":
+                            messagebox.showerror("Error", "The credtials for the account " + account[0] + " are invalid!")
                         else:
-                            print("An unknown error has occured while attempting to update tiles, trying again in "+ settings[0] + " seconds.")
+                            messagebox.showerror("Error","An unknown error has occured while attempting to update tiles, trying again in "+ settings[0] + " seconds.")
                             print(e)
                 start_time = time.time()
             time.sleep(0.05)
@@ -152,10 +163,19 @@ class tiletraker(tk.Tk):
         tile objects in the new list.
         
         runtype: 0 for init 1 for update'''
+        try:
+            decrypted_pass = decrypt_password(email, password)
+        except Exception as e:
+            messagebox.showerror("Error","Unable to decrypt password for account " +  email + " because secret key does not match!")
+            print(type(e).__name__)
+            return tiles
+
+        
+        
         async with ClientSession() as session:
             if runtype == 1:
                 tiles2 = tiles.copy()
-                api = await async_login(email, password, session)
+                api = await async_login(email, decrypted_pass, session)
                 tiles = await api.async_get_tiles()
                 for tile_uuid, tile in tiles.items():
                     # if tiles.__contains__
@@ -163,7 +183,7 @@ class tiletraker(tk.Tk):
                     tile.lastlocation = tiles2[tile.uuid].lastlocation
                     tile.account = email
             else:
-                api = await async_login(email, password, session)
+                api = await async_login(email, decrypted_pass, session)
     
                 tiles = await api.async_get_tiles()
 
@@ -252,7 +272,7 @@ class tiletraker(tk.Tk):
                 # print(tile_uuid)
                 
                 print(tile.name,tile.get_lastlocation(), str(tile.last_timestamp))
-                print(str(tile.latitude) + " " + str(tile.longitude))
+                print(str(tile.latitude) + " " + str(tile.longitude) + "\n")
     
     
     
@@ -263,6 +283,8 @@ class tiletraker(tk.Tk):
         self.initialize_files()
         initilized = False
         current_time = (time.time() + float(settings[0]) + 1)
+        if len(self.accounts) == 0:
+            initilized = True
         while not initilized:
             if current_time > (self.start_time + float(settings[0])):
                 for account in self.accounts:
@@ -307,7 +329,7 @@ class tiletraker(tk.Tk):
                             offline = True
                         else:
                             print("An unkown error has occured while attempting to update tiles, trying again in "+ settings[0] + " seconds.")
-                            print(e)
+                            print(type(e).__name__)
                 if not self.updates_avalible:
                     print("No new information availible, cheking again in " + settings[0] + " seconds.")
                 else:
@@ -316,4 +338,14 @@ class tiletraker(tk.Tk):
                 self.start_time = time.time()
             self.update_idletasks()
             self.update()
+
+def decrypt_password(email, password):
+    
+    password = bytes(password, "utf-8")
+    key = keyring.get_password("tiletracker", "encryption_key")
+    f = Fernet(key)
+    decrypt_password = f.decrypt(password)
+    return decrypt_password.decode()
+
+
             
